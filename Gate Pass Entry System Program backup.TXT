@@ -1,0 +1,542 @@
+INITIAL SCREEN================================================================================
+
+
+  CASE sy-ucomm.
+    WHEN 'CREATE'.
+      CALL SCREEN 0200.
+    WHEN 'UPDATE'.
+      CALL SCREEN 0300.
+    WHEN 'DELETE'.
+      CALL SCREEN 0500.
+    WHEN 'DISPLAY'.
+      CALL SCREEN 0600.
+    WHEN 'REPORT'.
+      CALL SCREEN 0700.
+  ENDCASE.
+
+  IF sy-ucomm = 'BACK'.
+    LEAVE TO SCREEN 0.
+  ENDIF.
+
+BACK MODULE================================================================================
+
+ CLEAR wa_hdr.
+      CLEAR wa_item.
+      CLEAR zgate_entry_hdr-entry_doc_no.
+      CLEAR zgate_entry_hdr-vehicle_no.
+      CLEAR zgate_entry_hdr-transporter_name.
+      CLEAR zgate_entry_hdr-driver_name.
+      CLEAR zgate_entry_hdr-driver_contact_no.
+      CLEAR zgate_entry_hdr-gate_no.
+      CLEAR zgate_entry_hdr-security_name.
+      CLEAR zgate_entry_hdr-entry_date.
+      CLEAR zgate_entry_hdr-entry_time.
+      CLEAR zgate_entry_hdr-remarks.
+      CLEAR zgate_entry_hdr-entry_doc_no.
+      CLEAR zgate_entry_item-material_desc.
+      CLEAR zgate_entry_item-material_qty.
+      CLEAR zgate_entry_item-material_uom.
+      CLEAR zgate_entry_item-gross_weight.
+      CLEAR zgate_entry_item-tare_weight.
+      CLEAR zgate_entry_item-net_weight.
+      clear it_report.
+      clear wa_report.
+  LEAVE TO SCREEN 0100.
+
+VALIDATION FOR CREATE==========================================================================
+
+
+   DATA: doc_exists TYPE abap_bool.
+
+  SELECT SINGLE entry_doc_no
+    INTO @DATA(entry_doc_no_check)
+    FROM zgate_entry_hdr
+    WHERE entry_doc_no = @entry_doc_no.
+
+  IF sy-subrc = 0.
+    MESSAGE 'Document number already exists. Please choose another number.' TYPE 'E'.
+  ENDIF.
+
+VALIDATION FOR CONTACT NO.===================================================================
+
+      driver_contact_no = zgate_entry_hdr-driver_contact_no.
+    IF strlen( driver_contact_no ) >= 15.
+      MESSAGE 'Driver Contact number should not exceed 15 characters.' TYPE 'E'.
+    ENDIF.
+
+VALIDATION FOR WEIGHT============================================================================
+
+
+  gross_weight = zgate_entry_item-gross_weight.
+  tare_weight = zgate_entry_item-tare_weight.
+
+    IF zgate_entry_item-tare_weight >= zgate_entry_item-gross_weight.
+      MESSAGE ' Tare weight must be less than gross weight. ' TYPE 'E'.
+    ENDIF.
+
+CREATE LOGIC======================================================================================
+
+IF sy-ucomm = 'SAVE'.
+
+      CALL FUNCTION 'NUMBER_GET_NEXT'
+        EXPORTING
+          nr_range_nr                   = '01'
+          object                        = 'ZDOC_NO'
+*         QUANTITY                      = '1'
+*         SUBOBJECT                     = ' '
+*         TOYEAR                        = '0000'
+*         IGNORE_BUFFER                 = ' '
+       IMPORTING
+         NUMBER                        = zgate_entry_hdr-entry_doc_no
+*         QUANTITY                      =
+*         RETURNCODE                    =
+*       EXCEPTIONS
+*         INTERVAL_NOT_FOUND            = 1
+*         NUMBER_RANGE_NOT_INTERN       = 2
+*         OBJECT_NOT_FOUND              = 3
+*         QUANTITY_IS_0                 = 4
+*         QUANTITY_IS_NOT_1             = 5
+*         INTERVAL_OVERFLOW             = 6
+*         BUFFER_OVERFLOW               = 7
+*         OTHERS                        = 8
+                .
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+    wa_hdr-entry_doc_no      = zgate_entry_hdr-entry_doc_no.
+    wa_hdr-vehicle_no        = zgate_entry_hdr-vehicle_no.
+    wa_hdr-transporter_name  = zgate_entry_hdr-transporter_name.
+    wa_hdr-driver_name       = zgate_entry_hdr-driver_name.
+    wa_hdr-driver_contact_no = zgate_entry_hdr-driver_contact_no.
+    wa_hdr-gate_no           = zgate_entry_hdr-gate_no.
+    wa_hdr-security_name     = zgate_entry_hdr-security_name.
+    wa_hdr-entry_date        = sy-datum.
+    wa_hdr-entry_time        = sy-uzeit.
+    wa_hdr-remarks           = zgate_entry_hdr-remarks.
+    wa_item-entry_doc_no     = zgate_entry_hdr-entry_doc_no.
+    wa_item-material_desc    = zgate_entry_item-material_desc.
+    wa_item-material_qty     = zgate_entry_item-material_qty.
+    wa_item-material_uom     = zgate_entry_item-material_uom.
+    wa_item-gross_weight     = zgate_entry_item-gross_weight.
+    wa_item-tare_weight      = zgate_entry_item-tare_weight.
+
+    wa_item-net_weight = zgate_entry_item-gross_weight - zgate_entry_item-tare_weight.
+
+    INSERT zgate_entry_hdr FROM wa_hdr.
+    INSERT zgate_entry_item FROM wa_item.
+
+SELECT SINGLE entry_date, entry_time
+      INTO ( @entry_date, @entry_time )
+      FROM zgate_entry_hdr
+      WHERE entry_doc_no = @entry_doc_no.
+
+      zgate_entry_hdr-entry_date = entry_date.
+      zgate_entry_hdr-entry_time = entry_time.
+
+    IF sy-subrc = 0.
+      COMMIT WORK.
+      MESSAGE 'Record Created successfully' TYPE 'S'.
+    ELSE.
+      MESSAGE 'Creation failed' TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+VALIDATION FOR DOC-NO==========================================================================
+
+entry_doc_no = zgate_entry_hdr-entry_doc_no.
+
+SELECT SINGLE entry_doc_no FROM zgate_entry_hdr INTO @DATA(entry_doc_no_check1)
+  WHERE entry_doc_no = @entry_doc_no.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'Document number does not exist' TYPE 'E'.
+endif.
+
+F4 HELP MODULE=================================================================================
+
+  TYPES: BEGIN OF ty_entry_doc_no,
+           entry_doc_no TYPE zentry_doc_no,
+         END OF ty_entry_doc_no.
+
+  DATA: it_entry_doc_no TYPE TABLE OF ty_entry_doc_no.
+
+  SELECT entry_doc_no
+    FROM zgate_entry_hdr
+    INTO TABLE it_entry_doc_no.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'ENTRY_DOC_NO'
+      dynpprog        = sy-repid
+      dynpnr          = sy-dynnr
+      dynprofield     = 'ZGATE_ENTRY_HDR-ENTRY_DOC_NO'
+      value_org       = 'S'
+    TABLES
+      value_tab       = it_entry_doc_no
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+SEARCH USER COMMAND NEXT===================================================================
+
+ IF sy-ucomm = 'NEXT'.
+
+    entry_doc_no = zgate_entry_hdr-entry_doc_no.
+
+    SELECT SINGLE vehicle_no, transporter_name, driver_name, driver_contact_no, gate_no, security_name, entry_date, entry_time, remarks
+      INTO (@vehicle_no, @transporter_name, @driver_name, @driver_contact_no, @gate_no, @security_name, @entry_date, @entry_time, @remarks)
+      FROM zgate_entry_hdr
+      WHERE entry_doc_no = @entry_doc_no.
+
+    SELECT SINGLE material_desc, material_qty, material_uom, gross_weight, tare_weight, net_weight
+      INTO (@material_desc, @material_qty, @material_uom, @gross_weight, @tare_weight, @net_weight)
+      FROM zgate_entry_item
+      WHERE entry_doc_no = @entry_doc_no.
+
+    IF sy-subrc = 0.
+*        zgate_entry_hdr-entry_doc_no = entry_doc_no.
+      zgate_entry_hdr-vehicle_no = vehicle_no.
+      zgate_entry_hdr-transporter_name = transporter_name.
+      zgate_entry_hdr-driver_name = driver_name.
+      zgate_entry_hdr-driver_contact_no = driver_contact_no.
+      zgate_entry_hdr-gate_no = gate_no.
+      zgate_entry_hdr-security_name = security_name.
+      zgate_entry_hdr-entry_date = entry_date.
+      zgate_entry_hdr-entry_time = entry_time.
+      zgate_entry_hdr-remarks = remarks.
+      zgate_entry_item-material_desc = material_desc.
+      zgate_entry_item-material_qty = material_qty.
+      zgate_entry_item-material_uom = material_uom.
+      zgate_entry_item-gross_weight = gross_weight.
+      zgate_entry_item-tare_weight = tare_weight.
+      zgate_entry_item-net_weight = net_weight.
+
+    ENDIF.
+
+    IF sy-subrc = 0.
+      CALL SCREEN 0400.
+    ELSE.
+      MESSAGE TEXT-007 TYPE 'E'.
+    ENDIF.
+  ENDIF.
+
+UPDATE==============================================================================================
+
+ IF sy-ucomm = 'UPDATE'.
+
+    wa_hdr-vehicle_no = zgate_entry_hdr-vehicle_no.
+    wa_hdr-transporter_name = zgate_entry_hdr-transporter_name.
+    wa_hdr-driver_name = zgate_entry_hdr-driver_name.
+    wa_hdr-gate_no = zgate_entry_hdr-gate_no.
+    wa_hdr-remarks = zgate_entry_hdr-remarks.
+    wa_item-material_desc = zgate_entry_item-material_desc.
+    wa_item-material_qty = zgate_entry_item-material_qty.
+    wa_item-material_uom = zgate_entry_item-material_uom.
+    wa_item-gross_weight = zgate_entry_item-gross_weight.
+    wa_item-tare_weight = zgate_entry_item-tare_weight.
+    wa_item-net_weight = zgate_entry_item-gross_weight - zgate_entry_item-tare_weight.
+
+    UPDATE zgate_entry_hdr
+      SET vehicle_no = @wa_hdr-vehicle_no,
+          transporter_name = @wa_hdr-transporter_name,
+          driver_name = @wa_hdr-driver_name,
+          gate_no = @wa_hdr-gate_no,
+          remarks = @wa_hdr-remarks
+  WHERE entry_doc_no = @entry_doc_no.
+
+    UPDATE zgate_entry_item
+       SET material_desc = @wa_item-material_desc,
+           material_qty = @wa_item-material_qty,
+           material_uom = @wa_item-material_uom,
+           gross_weight = @wa_item-gross_weight,
+           tare_weight = @wa_item-tare_weight,
+           net_weight = @wa_item-net_weight
+          WHERE entry_doc_no = @entry_doc_no.
+
+    IF sy-subrc = 0.
+      COMMIT WORK.
+      MESSAGE TEXT-008 TYPE 'S'.
+    ELSE.
+      MESSAGE TEXT-009 TYPE 'E'.
+    ENDIF.
+
+  ENDIF.
+
+DELETE=====================================================================================
+
+ IF sy-ucomm = 'DELETE'.
+
+    SELECT SINGLE *
+      FROM zgate_entry_hdr
+      WHERE entry_doc_no = @entry_doc_no
+      INTO @wa_hdr.
+
+    SELECT SINGLE *
+      FROM zgate_entry_item
+      WHERE entry_doc_no = @entry_doc_no
+      INTO @wa_item.
+
+    IF sy-subrc = 0.
+
+      DELETE FROM zgate_entry_hdr
+        WHERE entry_doc_no = @entry_doc_no.
+
+      DELETE FROM zgate_entry_item
+         WHERE entry_doc_no = @entry_doc_no.
+
+      IF sy-subrc = 0.
+        MESSAGE TEXT-010 TYPE 'S'.
+      CLEAR wa_hdr.
+      CLEAR wa_item.
+      CLEAR zgate_entry_hdr-entry_doc_no.
+      CLEAR zgate_entry_hdr-vehicle_no.
+      CLEAR zgate_entry_hdr-transporter_name.
+      CLEAR zgate_entry_hdr-driver_name.
+      CLEAR zgate_entry_hdr-driver_contact_no.
+      CLEAR zgate_entry_hdr-gate_no.
+      CLEAR zgate_entry_hdr-security_name.
+      CLEAR zgate_entry_hdr-entry_date.
+      CLEAR zgate_entry_hdr-entry_time.
+      CLEAR zgate_entry_hdr-remarks.
+      CLEAR zgate_entry_hdr-entry_doc_no.
+      CLEAR zgate_entry_item-material_desc.
+      CLEAR zgate_entry_item-material_qty.
+      CLEAR zgate_entry_item-material_uom.
+      CLEAR zgate_entry_item-gross_weight.
+      CLEAR zgate_entry_item-tare_weight.
+      ELSE.
+        MESSAGE TEXT-011 TYPE 'E'.
+        RETURN.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  COMMIT WORK.
+
+DOWNLOAD=========================================================================
+
+ IF sy-ucomm = 'DOWNLOAD'.
+
+    con_para-no_dialog = 'X'.
+    con_para-preview   = 'X'.
+    con_para-getotf    = 'X'.
+    out_option-tddest  = 'LP01'.
+
+    path        = 'C:\Users\' && sy-uname && '\Desktop\'.
+    file_name   = path && 'gate_pass_entry.pdf'.
+
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        formname           = 'ZS_GATE_PASS_FORM'
+      IMPORTING
+        fm_name            = p_name
+      EXCEPTIONS
+        no_form            = 1
+        no_function_module = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    CALL FUNCTION p_name
+      EXPORTING
+        control_parameters = con_para
+        output_options     = out_option
+        user_settings      = ''
+        entry_doc_no       = entry_doc_no
+        vehicle_no         = vehicle_no
+        transporter_name   = transporter_name
+        driver_name        = driver_name
+        driver_contact_no  = driver_contact_no
+        gate_no            = gate_no
+        security_name      = security_name
+        entry_date         = entry_date
+        entry_time         = entry_time
+        remarks            = remarks
+        material_desc      = material_desc
+        material_qty       = material_qty
+        material_uom       = material_uom
+        gross_weight       = gross_weight
+        tare_weight        = tare_weight
+        net_weight         = net_weight
+      IMPORTING
+        job_output_info    = job_out
+      EXCEPTIONS
+        formatting_error   = 1
+        internal_error     = 2
+        send_error         = 3
+        user_canceled      = 4
+        OTHERS             = 5.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    CALL FUNCTION 'CONVERT_OTF'
+      EXPORTING
+        format                = 'PDF'
+      TABLES
+        otf                   = job_out-otfdata
+        lines                 = it_pdf
+      EXCEPTIONS
+        err_max_linewidth     = 1
+        err_format            = 2
+        err_conv_not_possible = 3
+        err_bad_otf           = 4
+        OTHERS                = 5.
+    IF sy-subrc <> 0.
+      MESSAGE TEXT-012 TYPE 'E'.
+    ENDIF.
+
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING
+        filename                = file_name
+        filetype                = 'BIN'
+      TABLES
+        data_tab                = it_pdf
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        OTHERS                  = 22.
+
+    IF sy-subrc = 0.
+      MESSAGE TEXT-013 TYPE 'S'.
+    ELSE.
+      MESSAGE TEXT-014 TYPE 'E'.
+    ENDIF.
+  ENDIF.
+
+GENERATE REPORT================================================================
+
+ DATA: r1 TYPE c LENGTH 1,
+        r2 TYPE c LENGTH 1,
+        r3 TYPE c LENGTH 1.
+
+  TYPES: BEGIN OF ty_report,
+           entry_doc_no      TYPE zgate_entry_hdr-entry_doc_no,
+           vehicle_no        TYPE zgate_entry_hdr-vehicle_no,
+           transporter_name  TYPE zgate_entry_hdr-transporter_name,
+           driver_name       TYPE zgate_entry_hdr-driver_name,
+           driver_contact_no TYPE zgate_entry_hdr-driver_contact_no,
+           gate_no           TYPE zgate_entry_hdr-gate_no,
+           security_name     TYPE zgate_entry_hdr-security_name,
+           entry_date        TYPE zgate_entry_hdr-entry_date,
+           entry_time        TYPE zgate_entry_hdr-entry_time,
+           remarks           TYPE zgate_entry_hdr-remarks,
+           material_desc     TYPE zgate_entry_item-material_desc,
+           material_qty      TYPE zgate_entry_item-material_qty,
+           material_uom      TYPE zgate_entry_item-material_uom,
+           gross_weight      TYPE zgate_entry_item-gross_weight,
+           tare_weight       TYPE zgate_entry_item-tare_weight,
+           net_weight        TYPE zgate_entry_item-net_weight,
+         END OF ty_report.
+
+  DATA: it_report TYPE TABLE OF ty_report,
+        wa_report TYPE ty_report.
+
+  IF sy-ucomm = 'SUBMIT'.
+    CLEAR it_report.
+    CLEAR wa_report.
+    IF it_report IS INITIAL.
+      IF r1 = 'X'.
+        SELECT zgate_entry_hdr~entry_doc_no
+               zgate_entry_hdr~vehicle_no
+               zgate_entry_hdr~transporter_name
+               zgate_entry_hdr~driver_name
+               zgate_entry_hdr~driver_contact_no
+               zgate_entry_hdr~gate_no
+               zgate_entry_hdr~security_name
+               zgate_entry_hdr~entry_date
+               zgate_entry_hdr~entry_time
+               zgate_entry_hdr~remarks
+               zgate_entry_item~material_desc
+               zgate_entry_item~material_qty
+               zgate_entry_item~material_uom
+               zgate_entry_item~gross_weight
+               zgate_entry_item~tare_weight
+               zgate_entry_item~net_weight
+          INTO TABLE it_report
+          FROM zgate_entry_hdr
+          INNER JOIN zgate_entry_item
+           ON zgate_entry_hdr~entry_doc_no = zgate_entry_item~entry_doc_no
+          WHERE entry_date = zgate_entry_hdr-entry_date.
+
+      ELSEIF r2 = 'X'.
+        start_date = zgate_entry_hdr-entry_date - ( zgate_entry_hdr-entry_date MOD 7 ).
+        end_date   = start_date + 6.
+        SELECT zgate_entry_hdr~entry_doc_no
+               zgate_entry_hdr~vehicle_no
+               zgate_entry_hdr~transporter_name
+               zgate_entry_hdr~driver_name
+               zgate_entry_hdr~driver_contact_no
+               zgate_entry_hdr~gate_no
+               zgate_entry_hdr~security_name
+               zgate_entry_hdr~entry_date
+               zgate_entry_hdr~entry_time
+               zgate_entry_hdr~remarks
+               zgate_entry_item~material_desc
+               zgate_entry_item~material_qty
+               zgate_entry_item~material_uom
+               zgate_entry_item~gross_weight
+               zgate_entry_item~tare_weight
+               zgate_entry_item~net_weight
+          INTO TABLE it_report
+          FROM zgate_entry_hdr
+          INNER JOIN zgate_entry_item
+           ON zgate_entry_hdr~entry_doc_no = zgate_entry_item~entry_doc_no
+          WHERE entry_date BETWEEN start_date AND end_date.
+
+      ELSEIF r3 = 'X'.
+        SELECT zgate_entry_hdr~entry_doc_no
+               zgate_entry_hdr~vehicle_no
+               zgate_entry_hdr~transporter_name
+               zgate_entry_hdr~driver_name
+               zgate_entry_hdr~driver_contact_no
+               zgate_entry_hdr~gate_no
+               zgate_entry_hdr~security_name
+               zgate_entry_hdr~entry_date
+               zgate_entry_hdr~entry_time
+               zgate_entry_hdr~remarks
+               zgate_entry_item~material_desc
+               zgate_entry_item~material_qty
+               zgate_entry_item~material_uom
+               zgate_entry_item~gross_weight
+               zgate_entry_item~tare_weight
+               zgate_entry_item~net_weight
+          INTO TABLE it_report
+          FROM zgate_entry_hdr
+          INNER JOIN zgate_entry_item
+           ON zgate_entry_hdr~entry_doc_no = zgate_entry_item~entry_doc_no.
+      ELSE.
+        MESSAGE TEXT-015 TYPE 'E'.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+=============================================================================================================
+
+
+
